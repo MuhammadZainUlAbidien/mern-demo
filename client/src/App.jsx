@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis } from 'recharts';
 
 function App() {
   const [tasks, setTasks] = useState(() => {
@@ -16,6 +17,9 @@ function App() {
   const [authForm, setAuthForm] = useState({ name: '', email: '', password: '' });
   const [authError, setAuthError] = useState('');
 
+  // View States
+  const [activeTab, setActiveTab] = useState('tasks'); // 'tasks' or 'analytics'
+
   // Task Form States
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -25,11 +29,11 @@ function App() {
   const [subTaskInput, setSubTaskInput] = useState('');
   const [subTasks, setSubTasks] = useState([]);
   
-  // Filtering, Sorting & Editing States
+  // Filtering & Sorting
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState('all');
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState('All');
-  const [sortBy, setSortBy] = useState('newest'); // 'newest', 'oldest', 'priority', 'dueDate'
+  const [sortBy, setSortBy] = useState('newest');
   const [editingTaskId, setEditingTaskId] = useState(null);
   const [editTitle, setEditTitle] = useState('');
   const [isDarkMode, setIsDarkMode] = useState(true);
@@ -210,7 +214,21 @@ function App() {
   const highPriorityCount = tasks.filter(t => t.priority === 'High' && !t.completed).length;
   const progressPercent = tasks.length > 0 ? Math.round((completedCount / tasks.length) * 100) : 0;
 
-  // Filter & Sort Logic
+  // Chart Data Computation
+  const categoriesList = ['Personal', 'Work', 'University', 'Finance'];
+  const categoryData = categoriesList.map(cat => ({
+    name: cat,
+    value: tasks.filter(t => (t.category || 'Personal') === cat).length
+  })).filter(d => d.value > 0);
+
+  const priorityData = [
+    { name: 'High', value: tasks.filter(t => t.priority === 'High').length, color: '#f87171' },
+    { name: 'Medium', value: tasks.filter(t => t.priority === 'Medium').length, color: '#facc15' },
+    { name: 'Low', value: tasks.filter(t => t.priority === 'Low').length, color: '#4ade80' }
+  ].filter(d => d.value > 0);
+
+  const CATEGORY_COLORS = ['#38bdf8', '#a855f7', '#f43f5e', '#10b981'];
+
   const filteredTasks = tasks.filter(task => {
     const matchesSearch = task.title.toLowerCase().includes(search.toLowerCase()) || 
                           (task.description && task.description.toLowerCase().includes(search.toLowerCase()));
@@ -232,7 +250,7 @@ function App() {
     if (sortBy === 'oldest') {
       return (a._id || a.id) - (b._id || b.id);
     }
-    return (b._id || b.id) - (a._id || a.id); // Default 'newest'
+    return (b._id || b.id) - (a._id || a.id);
   });
 
   const theme = {
@@ -252,7 +270,7 @@ function App() {
 
   return (
     <div style={{ fontFamily: "'Inter', system-ui, sans-serif", backgroundColor: theme.bg, color: theme.text, minHeight: '100vh', padding: '20px 15px', transition: '0.3s' }}>
-      <div style={{ maxWidth: '640px', margin: '0 auto', backgroundColor: theme.card, borderRadius: '18px', padding: '25px', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.3)', border: `1px solid ${theme.border}` }}>
+      <div style={{ maxWidth: '660px', margin: '0 auto', backgroundColor: theme.card, borderRadius: '18px', padding: '25px', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.3)', border: `1px solid ${theme.border}` }}>
         
         {/* Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
@@ -327,291 +345,350 @@ function App() {
         ) : (
           /* LOGGED IN WORKSPACE VIEW */
           <div>
-            {/* User Profile Bar */}
+            {/* User Profile & Navigation Tabs */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: theme.inputBg, padding: '10px 14px', borderRadius: '10px', border: `1px solid ${theme.border}`, marginBottom: '15px' }}>
               <span style={{ fontSize: '13px', fontWeight: 'bold', color: '#38bdf8' }}>👤 Welcome, {user.name || user.email}</span>
-              <button onClick={handleLogout} style={{ backgroundColor: 'rgba(239, 68, 68, 0.2)', color: '#f87171', border: '1px solid #ef4444', padding: '4px 10px', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}>
-                Logout
-              </button>
-            </div>
-
-            {/* Analytics & Stats Bar */}
-            <div style={{ backgroundColor: theme.inputBg, padding: '14px', borderRadius: '12px', border: `1px solid ${theme.border}`, marginBottom: '20px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '8px' }}>
-                <span>Workspace Progress</span>
-                <span style={{ color: '#38bdf8', fontWeight: 'bold' }}>{completedCount} of {tasks.length} Done ({progressPercent}%)</span>
-              </div>
-              <div style={{ width: '100%', backgroundColor: theme.border, height: '8px', borderRadius: '4px', overflow: 'hidden', marginBottom: '12px' }}>
-                <div style={{ width: `${progressPercent}%`, backgroundColor: '#38bdf8', height: '100%', transition: 'width 0.4s ease' }}></div>
-              </div>
-
-              {/* Stats Pills & Clear Completed */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
-                <div style={{ display: 'flex', gap: '8px', fontSize: '11px', flexWrap: 'wrap' }}>
-                  <span style={{ padding: '4px 8px', borderRadius: '6px', backgroundColor: theme.card, border: `1px solid ${theme.border}` }}>📋 Total: <b>{tasks.length}</b></span>
-                  <span style={{ padding: '4px 8px', borderRadius: '6px', backgroundColor: 'rgba(234, 179, 8, 0.15)', color: '#facc15' }}>⏳ Pending: <b>{tasks.length - completedCount}</b></span>
-                  <span style={{ padding: '4px 8px', borderRadius: '6px', backgroundColor: 'rgba(239, 68, 68, 0.15)', color: '#f87171' }}>🔥 High: <b>{highPriorityCount}</b></span>
-                </div>
-
-                {completedCount > 0 && (
-                  <button onClick={clearCompleted} style={{ backgroundColor: 'transparent', color: '#f87171', border: 'none', cursor: 'pointer', fontSize: '11px', fontWeight: 'bold', textDecoration: 'underline' }}>
-                    🧹 Clear Completed ({completedCount})
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {/* Main Task Form */}
-            <form onSubmit={handleAddTask} style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '20px' }}>
-              <input 
-                type="text" 
-                placeholder="Task Title..." 
-                value={title} 
-                onChange={(e) => setTitle(e.target.value)}
-                style={{ padding: '12px 14px', borderRadius: '10px', backgroundColor: theme.inputBg, border: `1px solid ${theme.border}`, color: theme.text, fontSize: '14px', outline: 'none' }}
-              />
-              <input 
-                type="text" 
-                placeholder="Description..." 
-                value={description} 
-                onChange={(e) => setDescription(e.target.value)}
-                style={{ padding: '12px 14px', borderRadius: '10px', backgroundColor: theme.inputBg, border: `1px solid ${theme.border}`, color: theme.text, fontSize: '14px', outline: 'none' }}
-              />
               
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <select 
-                  value={category} 
-                  onChange={(e) => setCategory(e.target.value)}
-                  style={{ flex: 1, padding: '10px', borderRadius: '10px', backgroundColor: theme.inputBg, border: `1px solid ${theme.border}`, color: theme.text, fontSize: '12px' }}
+              <div style={{ display: 'flex', gap: '6px' }}>
+                <button 
+                  onClick={() => { playSoundAndHaptic(); setActiveTab('tasks'); }} 
+                  style={{ padding: '5px 10px', borderRadius: '6px', border: 'none', backgroundColor: activeTab === 'tasks' ? '#0284c7' : 'transparent', color: activeTab === 'tasks' ? '#fff' : theme.subText, cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}
                 >
-                  <option value="Personal">👤 Personal</option>
-                  <option value="Work">💼 Work</option>
-                  <option value="University">📚 University</option>
-                  <option value="Finance">💰 Finance</option>
-                </select>
-
-                <select 
-                  value={priority} 
-                  onChange={(e) => setPriority(e.target.value)}
-                  style={{ flex: 1, padding: '10px', borderRadius: '10px', backgroundColor: theme.inputBg, border: `1px solid ${theme.border}`, color: theme.text, fontSize: '12px' }}
+                  📋 Tasks
+                </button>
+                <button 
+                  onClick={() => { playSoundAndHaptic(); setActiveTab('analytics'); }} 
+                  style={{ padding: '5px 10px', borderRadius: '6px', border: 'none', backgroundColor: activeTab === 'analytics' ? '#0284c7' : 'transparent', color: activeTab === 'analytics' ? '#fff' : theme.subText, cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}
                 >
-                  <option value="High">🔥 High</option>
-                  <option value="Medium">⚡ Medium</option>
-                  <option value="Low">🌱 Low</option>
-                </select>
-
-                <input 
-                  type="date" 
-                  value={dueDate} 
-                  onChange={(e) => setDueDate(e.target.value)}
-                  style={{ flex: 1, padding: '10px', borderRadius: '10px', backgroundColor: theme.inputBg, border: `1px solid ${theme.border}`, color: theme.text, fontSize: '12px' }}
-                />
-              </div>
-
-              {/* Sub-tasks Creator Section */}
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <input 
-                  type="text" 
-                  placeholder="+ Add Sub-task checklist item..." 
-                  value={subTaskInput} 
-                  onChange={(e) => setSubTaskInput(e.target.value)}
-                  style={{ flex: 1, padding: '8px 12px', borderRadius: '8px', backgroundColor: theme.inputBg, border: `1px solid ${theme.border}`, color: theme.text, fontSize: '12px' }}
-                />
-                <button type="button" onClick={handleAddSubTask} style={{ padding: '8px 12px', backgroundColor: theme.inputBg, border: `1px solid ${theme.border}`, color: '#38bdf8', borderRadius: '8px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}>
-                  Add Item
+                  📊 Analytics
+                </button>
+                <button onClick={handleLogout} style={{ backgroundColor: 'rgba(239, 68, 68, 0.2)', color: '#f87171', border: '1px solid #ef4444', padding: '4px 10px', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold', marginLeft: '6px' }}>
+                  Logout
                 </button>
               </div>
+            </div>
 
-              {subTasks.length > 0 && (
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                  {subTasks.map((st) => (
-                    <span key={st.id} style={{ fontSize: '11px', padding: '3px 8px', borderRadius: '6px', backgroundColor: theme.inputBg, border: `1px solid ${theme.border}`, color: theme.subText }}>
-                      ▫️ {st.text}
-                    </span>
+            {/* TAB 1: MAIN TASKS VIEW */}
+            {activeTab === 'tasks' && (
+              <div>
+                {/* Analytics & Stats Bar */}
+                <div style={{ backgroundColor: theme.inputBg, padding: '14px', borderRadius: '12px', border: `1px solid ${theme.border}`, marginBottom: '20px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '8px' }}>
+                    <span>Workspace Progress</span>
+                    <span style={{ color: '#38bdf8', fontWeight: 'bold' }}>{completedCount} of {tasks.length} Done ({progressPercent}%)</span>
+                  </div>
+                  <div style={{ width: '100%', backgroundColor: theme.border, height: '8px', borderRadius: '4px', overflow: 'hidden', marginBottom: '12px' }}>
+                    <div style={{ width: `${progressPercent}%`, backgroundColor: '#38bdf8', height: '100%', transition: 'width 0.4s ease' }}></div>
+                  </div>
+
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+                    <div style={{ display: 'flex', gap: '8px', fontSize: '11px', flexWrap: 'wrap' }}>
+                      <span style={{ padding: '4px 8px', borderRadius: '6px', backgroundColor: theme.card, border: `1px solid ${theme.border}` }}>📋 Total: <b>{tasks.length}</b></span>
+                      <span style={{ padding: '4px 8px', borderRadius: '6px', backgroundColor: 'rgba(234, 179, 8, 0.15)', color: '#facc15' }}>⏳ Pending: <b>{tasks.length - completedCount}</b></span>
+                      <span style={{ padding: '4px 8px', borderRadius: '6px', backgroundColor: 'rgba(239, 68, 68, 0.15)', color: '#f87171' }}>🔥 High: <b>{highPriorityCount}</b></span>
+                    </div>
+
+                    {completedCount > 0 && (
+                      <button onClick={clearCompleted} style={{ backgroundColor: 'transparent', color: '#f87171', border: 'none', cursor: 'pointer', fontSize: '11px', fontWeight: 'bold', textDecoration: 'underline' }}>
+                        🧹 Clear Completed ({completedCount})
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Task Creation Form */}
+                <form onSubmit={handleAddTask} style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '20px' }}>
+                  <input 
+                    type="text" 
+                    placeholder="Task Title..." 
+                    value={title} 
+                    onChange={(e) => setTitle(e.target.value)}
+                    style={{ padding: '12px 14px', borderRadius: '10px', backgroundColor: theme.inputBg, border: `1px solid ${theme.border}`, color: theme.text, fontSize: '14px', outline: 'none' }}
+                  />
+                  <input 
+                    type="text" 
+                    placeholder="Description..." 
+                    value={description} 
+                    onChange={(e) => setDescription(e.target.value)}
+                    style={{ padding: '12px 14px', borderRadius: '10px', backgroundColor: theme.inputBg, border: `1px solid ${theme.border}`, color: theme.text, fontSize: '14px', outline: 'none' }}
+                  />
+                  
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <select 
+                      value={category} 
+                      onChange={(e) => setCategory(e.target.value)}
+                      style={{ flex: 1, padding: '10px', borderRadius: '10px', backgroundColor: theme.inputBg, border: `1px solid ${theme.border}`, color: theme.text, fontSize: '12px' }}
+                    >
+                      <option value="Personal">👤 Personal</option>
+                      <option value="Work">💼 Work</option>
+                      <option value="University">📚 University</option>
+                      <option value="Finance">💰 Finance</option>
+                    </select>
+
+                    <select 
+                      value={priority} 
+                      onChange={(e) => setPriority(e.target.value)}
+                      style={{ flex: 1, padding: '10px', borderRadius: '10px', backgroundColor: theme.inputBg, border: `1px solid ${theme.border}`, color: theme.text, fontSize: '12px' }}
+                    >
+                      <option value="High">🔥 High</option>
+                      <option value="Medium">⚡ Medium</option>
+                      <option value="Low">🌱 Low</option>
+                    </select>
+
+                    <input 
+                      type="date" 
+                      value={dueDate} 
+                      onChange={(e) => setDueDate(e.target.value)}
+                      style={{ flex: 1, padding: '10px', borderRadius: '10px', backgroundColor: theme.inputBg, border: `1px solid ${theme.border}`, color: theme.text, fontSize: '12px' }}
+                    />
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <input 
+                      type="text" 
+                      placeholder="+ Add Sub-task checklist item..." 
+                      value={subTaskInput} 
+                      onChange={(e) => setSubTaskInput(e.target.value)}
+                      style={{ flex: 1, padding: '8px 12px', borderRadius: '8px', backgroundColor: theme.inputBg, border: `1px solid ${theme.border}`, color: theme.text, fontSize: '12px' }}
+                    />
+                    <button type="button" onClick={handleAddSubTask} style={{ padding: '8px 12px', backgroundColor: theme.inputBg, border: `1px solid ${theme.border}`, color: '#38bdf8', borderRadius: '8px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}>
+                      Add Item
+                    </button>
+                  </div>
+
+                  {subTasks.length > 0 && (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                      {subTasks.map((st) => (
+                        <span key={st.id} style={{ fontSize: '11px', padding: '3px 8px', borderRadius: '6px', backgroundColor: theme.inputBg, border: `1px solid ${theme.border}`, color: theme.subText }}>
+                          ▫️ {st.text}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+
+                  <button 
+                    type="submit" 
+                    style={{ padding: '12px', backgroundColor: '#0284c7', color: '#fff', border: 'none', borderRadius: '10px', cursor: 'pointer', fontWeight: 'bold', fontSize: '14px', marginTop: '5px' }}
+                  >
+                    + Create Task
+                  </button>
+                </form>
+
+                {/* Category Filter Pills */}
+                <div style={{ display: 'flex', gap: '6px', overflowX: 'auto', paddingBottom: '8px', marginBottom: '12px' }}>
+                  {['All', 'Personal', 'Work', 'University', 'Finance'].map((cat) => (
+                    <button
+                      key={cat}
+                      onClick={() => { playSoundAndHaptic(); setSelectedCategoryFilter(cat); }}
+                      style={{
+                        padding: '6px 12px',
+                        borderRadius: '8px',
+                        border: `1px solid ${selectedCategoryFilter === cat ? '#0284c7' : theme.border}`,
+                        fontSize: '11px',
+                        fontWeight: 'bold',
+                        cursor: 'pointer',
+                        backgroundColor: selectedCategoryFilter === cat ? '#0284c7' : theme.inputBg,
+                        color: selectedCategoryFilter === cat ? '#ffffff' : theme.subText,
+                        whiteSpace: 'nowrap'
+                      }}
+                    >
+                      {cat === 'All' ? '📂 All Categories' : cat}
+                    </button>
                   ))}
                 </div>
-              )}
 
-              <button 
-                type="submit" 
-                style={{ padding: '12px', backgroundColor: '#0284c7', color: '#fff', border: 'none', borderRadius: '10px', cursor: 'pointer', fontWeight: 'bold', fontSize: '14px', marginTop: '5px' }}
-              >
-                + Create Task
-              </button>
-            </form>
+                {/* Search, Status & Sorting Bar */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '20px' }}>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <input 
+                      type="text" 
+                      placeholder="🔍 Search tasks..." 
+                      value={search} 
+                      onChange={(e) => setSearch(e.target.value)}
+                      style={{ flex: 2, padding: '10px 14px', borderRadius: '8px', backgroundColor: theme.inputBg, border: `1px solid ${theme.border}`, color: theme.text, fontSize: '13px' }}
+                    />
 
-            {/* Category Filter Pills */}
-            <div style={{ display: 'flex', gap: '6px', overflowX: 'auto', paddingBottom: '8px', marginBottom: '12px' }}>
-              {['All', 'Personal', 'Work', 'University', 'Finance'].map((cat) => (
-                <button
-                  key={cat}
-                  onClick={() => { playSoundAndHaptic(); setSelectedCategoryFilter(cat); }}
-                  style={{
-                    padding: '6px 12px',
-                    borderRadius: '8px',
-                    border: `1px solid ${selectedCategoryFilter === cat ? '#0284c7' : theme.border}`,
-                    fontSize: '11px',
-                    fontWeight: 'bold',
-                    cursor: 'pointer',
-                    backgroundColor: selectedCategoryFilter === cat ? '#0284c7' : theme.inputBg,
-                    color: selectedCategoryFilter === cat ? '#ffffff' : theme.subText,
-                    whiteSpace: 'nowrap'
-                  }}
-                >
-                  {cat === 'All' ? '📂 All Categories' : cat}
-                </button>
-              ))}
-            </div>
+                    <select 
+                      value={sortBy} 
+                      onChange={(e) => setSortBy(e.target.value)}
+                      style={{ flex: 1, padding: '10px', borderRadius: '8px', backgroundColor: theme.inputBg, border: `1px solid ${theme.border}`, color: theme.text, fontSize: '12px', fontWeight: '600' }}
+                    >
+                      <option value="newest">↕️ Newest First</option>
+                      <option value="oldest">↕️ Oldest First</option>
+                      <option value="priority">🔥 High Priority</option>
+                      <option value="dueDate">📅 Due Date</option>
+                    </select>
+                  </div>
 
-            {/* Search, Status & Sorting Bar */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '20px' }}>
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <input 
-                  type="text" 
-                  placeholder="🔍 Search tasks..." 
-                  value={search} 
-                  onChange={(e) => setSearch(e.target.value)}
-                  style={{ flex: 2, padding: '10px 14px', borderRadius: '8px', backgroundColor: theme.inputBg, border: `1px solid ${theme.border}`, color: theme.text, fontSize: '13px' }}
-                />
+                  <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
+                    {['all', 'pending', 'completed'].map((type) => (
+                      <button
+                        key={type}
+                        onClick={() => { playSoundAndHaptic(); setFilter(type); }}
+                        style={{
+                          padding: '5px 12px',
+                          borderRadius: '20px',
+                          border: 'none',
+                          fontSize: '12px',
+                          fontWeight: '600',
+                          textTransform: 'capitalize',
+                          cursor: 'pointer',
+                          backgroundColor: filter === type ? '#0284c7' : theme.inputBg,
+                          color: filter === type ? '#ffffff' : theme.subText
+                        }}
+                      >
+                        {type}
+                      </button>
+                    ))}
+                  </div>
+                </div>
 
-                <select 
-                  value={sortBy} 
-                  onChange={(e) => setSortBy(e.target.value)}
-                  style={{ flex: 1, padding: '10px', borderRadius: '8px', backgroundColor: theme.inputBg, border: `1px solid ${theme.border}`, color: theme.text, fontSize: '12px', fontWeight: '600' }}
-                >
-                  <option value="newest">↕️ Newest First</option>
-                  <option value="oldest">↕️ Oldest First</option>
-                  <option value="priority">🔥 High Priority</option>
-                  <option value="dueDate">📅 Due Date</option>
-                </select>
-              </div>
+                {/* Task Cards */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  {filteredTasks.length === 0 ? (
+                    <p style={{ textAlign: 'center', color: theme.subText, fontSize: '13px', margin: '15px 0' }}>No tasks found in this view.</p>
+                  ) : (
+                    filteredTasks.map((task) => {
+                      const id = task._id || task.id;
+                      const dateStatus = getDateStatus(task.dueDate);
 
-              <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
-                {['all', 'pending', 'completed'].map((type) => (
-                  <button
-                    key={type}
-                    onClick={() => { playSoundAndHaptic(); setFilter(type); }}
-                    style={{
-                      padding: '5px 12px',
-                      borderRadius: '20px',
-                      border: 'none',
-                      fontSize: '12px',
-                      fontWeight: '600',
-                      textTransform: 'capitalize',
-                      cursor: 'pointer',
-                      backgroundColor: filter === type ? '#0284c7' : theme.inputBg,
-                      color: filter === type ? '#ffffff' : theme.subText
-                    }}
-                  >
-                    {type}
-                  </button>
-                ))}
-              </div>
-            </div>
+                      return (
+                        <div key={id} style={{ padding: '14px 16px', borderRadius: '12px', backgroundColor: theme.inputBg, border: `1px solid ${theme.border}` }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                            <div style={{ flex: 1, paddingRight: '10px' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px', flexWrap: 'wrap' }}>
+                                {editingTaskId === id ? (
+                                  <div style={{ display: 'flex', gap: '6px', width: '100%', marginBottom: '4px' }}>
+                                    <input 
+                                      type="text" 
+                                      value={editTitle} 
+                                      onChange={(e) => setEditTitle(e.target.value)}
+                                      style={{ padding: '4px 8px', borderRadius: '6px', backgroundColor: theme.card, border: `1px solid ${theme.border}`, color: theme.text, fontSize: '14px', flex: 1 }}
+                                    />
+                                    <button onClick={() => saveEdit(id)} style={{ padding: '4px 8px', backgroundColor: '#22c55e', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '11px', fontWeight: 'bold' }}>Save</button>
+                                  </div>
+                                ) : (
+                                  <h4 style={{ margin: 0, color: task.completed ? theme.subText : theme.text, textDecoration: task.completed ? 'line-through' : 'none', fontSize: '15px' }}>
+                                    {task.title}
+                                  </h4>
+                                )}
 
-            {/* Task Cards */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              {filteredTasks.length === 0 ? (
-                <p style={{ textAlign: 'center', color: theme.subText, fontSize: '13px', margin: '15px 0' }}>No tasks found in this view.</p>
-              ) : (
-                filteredTasks.map((task) => {
-                  const id = task._id || task.id;
-                  const dateStatus = getDateStatus(task.dueDate);
-
-                  return (
-                    <div key={id} style={{ padding: '14px 16px', borderRadius: '12px', backgroundColor: theme.inputBg, border: `1px solid ${theme.border}` }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                        <div style={{ flex: 1, paddingRight: '10px' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px', flexWrap: 'wrap' }}>
-                            
-                            {/* Inline Edit Title or Standard Display */}
-                            {editingTaskId === id ? (
-                              <div style={{ display: 'flex', gap: '6px', width: '100%', marginBottom: '4px' }}>
-                                <input 
-                                  type="text" 
-                                  value={editTitle} 
-                                  onChange={(e) => setEditTitle(e.target.value)}
-                                  style={{ padding: '4px 8px', borderRadius: '6px', backgroundColor: theme.card, border: `1px solid ${theme.border}`, color: theme.text, fontSize: '14px', flex: 1 }}
-                                />
-                                <button onClick={() => saveEdit(id)} style={{ padding: '4px 8px', backgroundColor: '#22c55e', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '11px', fontWeight: 'bold' }}>Save</button>
+                                <span style={{ fontSize: '10px', fontWeight: 'bold', padding: '2px 6px', borderRadius: '6px', backgroundColor: 'rgba(56, 189, 248, 0.15)', color: '#38bdf8', border: '1px solid #0284c7' }}>
+                                  {task.category || 'Personal'}
+                                </span>
+                                {task.priority && (
+                                  <span style={{ fontSize: '10px', fontWeight: 'bold', padding: '2px 6px', borderRadius: '6px', backgroundColor: priorityColors[task.priority]?.bg, color: priorityColors[task.priority]?.text, border: `1px solid ${priorityColors[task.priority]?.border}` }}>
+                                    {task.priority}
+                                  </span>
+                                )}
+                                {dateStatus && !task.completed && (
+                                  <span style={{ fontSize: '10px', fontWeight: 'bold', padding: '2px 6px', borderRadius: '6px', backgroundColor: dateStatus.bg, color: dateStatus.color, border: `1px solid ${dateStatus.color}` }}>
+                                    {dateStatus.label}
+                                  </span>
+                                )}
                               </div>
-                            ) : (
-                              <h4 style={{ margin: 0, color: task.completed ? theme.subText : theme.text, textDecoration: task.completed ? 'line-through' : 'none', fontSize: '15px' }}>
-                                {task.title}
-                              </h4>
-                            )}
 
-                            <span style={{ fontSize: '10px', fontWeight: 'bold', padding: '2px 6px', borderRadius: '6px', backgroundColor: 'rgba(56, 189, 248, 0.15)', color: '#38bdf8', border: '1px solid #0284c7' }}>
-                              {task.category || 'Personal'}
-                            </span>
-                            {task.priority && (
-                              <span style={{ fontSize: '10px', fontWeight: 'bold', padding: '2px 6px', borderRadius: '6px', backgroundColor: priorityColors[task.priority]?.bg, color: priorityColors[task.priority]?.text, border: `1px solid ${priorityColors[task.priority]?.border}` }}>
-                                {task.priority}
-                              </span>
-                            )}
-                            {dateStatus && !task.completed && (
-                              <span style={{ fontSize: '10px', fontWeight: 'bold', padding: '2px 6px', borderRadius: '6px', backgroundColor: dateStatus.bg, color: dateStatus.color, border: `1px solid ${dateStatus.color}` }}>
-                                {dateStatus.label}
-                              </span>
-                            )}
-                          </div>
-
-                          {task.description && <p style={{ margin: '0 0 6px 0', color: theme.subText, fontSize: '12px' }}>{task.description}</p>}
-                          
-                          <div style={{ display: 'flex', gap: '10px', alignItems: 'center', fontSize: '11px' }}>
-                            {task.dueDate && <span style={{ color: '#38bdf8', fontWeight: 'bold' }}>📅 Due: {task.dueDate}</span>}
-                            {task.createdAt && <span style={{ color: theme.subText }}>🕒 {task.createdAt}</span>}
-                          </div>
-                          
-                          {/* Sub-tasks Checklist Display */}
-                          {task.subTasks && task.subTasks.length > 0 && (
-                            <div style={{ marginTop: '8px', borderTop: `1px dashed ${theme.border}`, paddingTop: '6px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                              {task.subTasks.map(st => (
-                                <div key={st.id} onClick={() => toggleSubTask(id, st.id)} style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '12px', color: st.completed ? theme.subText : theme.text }}>
-                                  <input type="checkbox" checked={st.completed} readOnly style={{ cursor: 'pointer' }} />
-                                  <span style={{ textDecoration: st.completed ? 'line-through' : 'none' }}>{st.text}</span>
+                              {task.description && <p style={{ margin: '0 0 6px 0', color: theme.subText, fontSize: '12px' }}>{task.description}</p>}
+                              
+                              <div style={{ display: 'flex', gap: '10px', alignItems: 'center', fontSize: '11px' }}>
+                                {task.dueDate && <span style={{ color: '#38bdf8', fontWeight: 'bold' }}>📅 Due: {task.dueDate}</span>}
+                                {task.createdAt && <span style={{ color: theme.subText }}>🕒 {task.createdAt}</span>}
+                              </div>
+                              
+                              {task.subTasks && task.subTasks.length > 0 && (
+                                <div style={{ marginTop: '8px', borderTop: `1px dashed ${theme.border}`, paddingTop: '6px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                  {task.subTasks.map(st => (
+                                    <div key={st.id} onClick={() => toggleSubTask(id, st.id)} style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '12px', color: st.completed ? theme.subText : theme.text }}>
+                                      <input type="checkbox" checked={st.completed} readOnly style={{ cursor: 'pointer' }} />
+                                      <span style={{ textDecoration: st.completed ? 'line-through' : 'none' }}>{st.text}</span>
+                                    </div>
+                                  ))}
                                 </div>
-                              ))}
+                              )}
                             </div>
-                          )}
-                        </div>
 
-                        <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                          <button 
-                            onClick={() => startEditing(task)}
-                            title="Edit Title"
-                            style={{ backgroundColor: theme.inputBg, color: theme.subText, border: `1px solid ${theme.border}`, padding: '5px 8px', borderRadius: '8px', cursor: 'pointer', fontSize: '12px' }}
-                          >
-                            ✏️
-                          </button>
-                          <button 
-                            onClick={() => toggleTaskStatus(id)}
-                            style={{ 
-                              backgroundColor: task.completed ? 'rgba(34, 197, 94, 0.2)' : 'rgba(234, 179, 8, 0.2)', 
-                              color: task.completed ? '#4ade80' : '#facc15', 
-                              border: '1px solid ' + (task.completed ? '#22c55e' : '#eab308'), 
-                              padding: '5px 10px', 
-                              borderRadius: '8px', 
-                              cursor: 'pointer', 
-                              fontSize: '12px', 
-                              fontWeight: 'bold' 
-                            }}
-                          >
-                            {task.completed ? '✓ Done' : '⏳ Pending'}
-                          </button>
-                          <button 
-                            onClick={() => deleteTask(id)}
-                            style={{ backgroundColor: 'rgba(239, 68, 68, 0.2)', color: '#f87171', border: '1px solid #ef4444', padding: '5px 8px', borderRadius: '8px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}
-                          >
-                            ✕
-                          </button>
+                            <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                              <button 
+                                onClick={() => startEditing(task)}
+                                title="Edit Title"
+                                style={{ backgroundColor: theme.inputBg, color: theme.subText, border: `1px solid ${theme.border}`, padding: '5px 8px', borderRadius: '8px', cursor: 'pointer', fontSize: '12px' }}
+                              >
+                                ✏️
+                              </button>
+                              <button 
+                                onClick={() => toggleTaskStatus(id)}
+                                style={{ 
+                                  backgroundColor: task.completed ? 'rgba(34, 197, 94, 0.2)' : 'rgba(234, 179, 8, 0.2)', 
+                                  color: task.completed ? '#4ade80' : '#facc15', 
+                                  border: '1px solid ' + (task.completed ? '#22c55e' : '#eab308'), 
+                                  padding: '5px 10px', 
+                                  borderRadius: '8px', 
+                                  cursor: 'pointer', 
+                                  fontSize: '12px', 
+                                  fontWeight: 'bold' 
+                                }}
+                              >
+                                {task.completed ? '✓ Done' : '⏳ Pending'}
+                              </button>
+                              <button 
+                                onClick={() => deleteTask(id)}
+                                style={{ backgroundColor: 'rgba(239, 68, 68, 0.2)', color: '#f87171', border: '1px solid #ef4444', padding: '5px 8px', borderRadius: '8px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}
+                              >
+                                ✕
+                              </button>
+                            </div>
+                          </div>
                         </div>
-                      </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* TAB 2: INTERACTIVE ANALYTICS DASHBOARD */}
+            {activeTab === 'analytics' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                <div style={{ backgroundColor: theme.inputBg, padding: '16px', borderRadius: '12px', border: `1px solid ${theme.border}` }}>
+                  <h3 style={{ margin: '0 0 10px 0', fontSize: '16px', color: '#38bdf8' }}>📊 Category Distribution</h3>
+                  {categoryData.length === 0 ? (
+                    <p style={{ fontSize: '12px', color: theme.subText }}>No data available yet. Create tasks to see chart breakdown.</p>
+                  ) : (
+                    <div style={{ height: '200px', width: '100%' }}>
+                      <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                          <Pie data={categoryData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={60} fill="#8884d8" label>
+                            {categoryData.map((entry, index) => (
+                              <Cell key={`cell-${index}`} fill={CATEGORY_COLORS[index % CATEGORY_COLORS.length]} />
+                            ))}
+                          </Pie>
+                          <Tooltip />
+                        </PieChart>
+                      </ResponsiveContainer>
                     </div>
-                  );
-                })
-              )}
-            </div>
+                  )}
+                </div>
+
+                <div style={{ backgroundColor: theme.inputBg, padding: '16px', borderRadius: '12px', border: `1px solid ${theme.border}` }}>
+                  <h3 style={{ margin: '0 0 10px 0', fontSize: '16px', color: '#38bdf8' }}>🔥 Priority Breakdown</h3>
+                  {priorityData.length === 0 ? (
+                    <p style={{ fontSize: '12px', color: theme.subText }}>No tasks to analyze.</p>
+                  ) : (
+                    <div style={{ height: '180px', width: '100%' }}>
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={priorityData}>
+                          <XAxis dataKey="name" stroke={theme.subText} fontSize={12} />
+                          <YAxis stroke={theme.subText} fontSize={12} />
+                          <Tooltip />
+                          <Bar dataKey="value" fill="#0284c7" radius={[4, 4, 0, 0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
           </div>
         )}
 
