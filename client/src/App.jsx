@@ -18,7 +18,7 @@ function App() {
   const [authError, setAuthError] = useState('');
 
   // View States
-  const [activeTab, setActiveTab] = useState('tasks'); // 'tasks' or 'analytics'
+  const [activeTab, setActiveTab] = useState('tasks'); // 'tasks', 'kanban', or 'analytics'
 
   // Task Form States
   const [title, setTitle] = useState('');
@@ -202,6 +202,17 @@ function App() {
     document.body.removeChild(link);
   };
 
+  const exportToJSON = () => {
+    playSoundAndHaptic();
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(tasks, null, 2));
+    const link = document.createElement("a");
+    link.setAttribute("href", dataStr);
+    link.setAttribute("download", `${user?.name || 'User'}_Workspace_Backup.json`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const getDateStatus = (dateString) => {
     if (!dateString) return null;
     const today = new Date().toISOString().split('T')[0];
@@ -270,7 +281,7 @@ function App() {
 
   return (
     <div style={{ fontFamily: "'Inter', system-ui, sans-serif", backgroundColor: theme.bg, color: theme.text, minHeight: '100vh', padding: '20px 15px', transition: '0.3s' }}>
-      <div style={{ maxWidth: '660px', margin: '0 auto', backgroundColor: theme.card, borderRadius: '18px', padding: '25px', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.3)', border: `1px solid ${theme.border}` }}>
+      <div style={{ maxWidth: activeTab === 'kanban' ? '920px' : '660px', margin: '0 auto', backgroundColor: theme.card, borderRadius: '18px', padding: '25px', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.3)', border: `1px solid ${theme.border}` }}>
         
         {/* Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
@@ -278,19 +289,28 @@ function App() {
             <h2 style={{ color: '#38bdf8', margin: 0, fontSize: '24px', fontWeight: '800' }}>⚡ MERN SaaS Hub</h2>
             <p style={{ color: theme.subText, fontSize: '13px', marginTop: '3px' }}>Enterprise Task Management System</p>
           </div>
-          <div style={{ display: 'flex', gap: '8px' }}>
+          <div style={{ display: 'flex', gap: '6px' }}>
             {user && (
-              <button 
-                onClick={exportToCSV}
-                title="Export CSV"
-                style={{ padding: '8px 12px', borderRadius: '10px', border: `1px solid ${theme.border}`, backgroundColor: theme.inputBg, color: '#38bdf8', cursor: 'pointer', fontSize: '13px', fontWeight: 'bold' }}
-              >
-                📥 CSV
-              </button>
+              <>
+                <button 
+                  onClick={exportToCSV}
+                  title="Export CSV"
+                  style={{ padding: '8px 10px', borderRadius: '10px', border: `1px solid ${theme.border}`, backgroundColor: theme.inputBg, color: '#38bdf8', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}
+                >
+                  📥 CSV
+                </button>
+                <button 
+                  onClick={exportToJSON}
+                  title="Export JSON Backup"
+                  style={{ padding: '8px 10px', borderRadius: '10px', border: `1px solid ${theme.border}`, backgroundColor: theme.inputBg, color: '#a855f7', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}
+                >
+                  💾 JSON
+                </button>
+              </>
             )}
             <button 
               onClick={() => { playSoundAndHaptic(); setIsDarkMode(!isDarkMode); }}
-              style={{ padding: '8px 12px', borderRadius: '10px', border: `1px solid ${theme.border}`, backgroundColor: theme.inputBg, color: theme.text, cursor: 'pointer', fontSize: '13px', fontWeight: 'bold' }}
+              style={{ padding: '8px 10px', borderRadius: '10px', border: `1px solid ${theme.border}`, backgroundColor: theme.inputBg, color: theme.text, cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}
             >
               {isDarkMode ? '☀️' : '🌙'}
             </button>
@@ -345,8 +365,8 @@ function App() {
         ) : (
           /* LOGGED IN WORKSPACE VIEW */
           <div>
-            {/* User Profile & Navigation Tabs */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: theme.inputBg, padding: '10px 14px', borderRadius: '10px', border: `1px solid ${theme.border}`, marginBottom: '15px' }}>
+            {/* User Profile & View Navigation Tabs */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: theme.inputBg, padding: '10px 14px', borderRadius: '10px', border: `1px solid ${theme.border}`, marginBottom: '15px', flexWrap: 'wrap', gap: '8px' }}>
               <span style={{ fontSize: '13px', fontWeight: 'bold', color: '#38bdf8' }}>👤 Welcome, {user.name || user.email}</span>
               
               <div style={{ display: 'flex', gap: '6px' }}>
@@ -354,7 +374,13 @@ function App() {
                   onClick={() => { playSoundAndHaptic(); setActiveTab('tasks'); }} 
                   style={{ padding: '5px 10px', borderRadius: '6px', border: 'none', backgroundColor: activeTab === 'tasks' ? '#0284c7' : 'transparent', color: activeTab === 'tasks' ? '#fff' : theme.subText, cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}
                 >
-                  📋 Tasks
+                  📋 List
+                </button>
+                <button 
+                  onClick={() => { playSoundAndHaptic(); setActiveTab('kanban'); }} 
+                  style={{ padding: '5px 10px', borderRadius: '6px', border: 'none', backgroundColor: activeTab === 'kanban' ? '#0284c7' : 'transparent', color: activeTab === 'kanban' ? '#fff' : theme.subText, cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}
+                >
+                  📌 Kanban
                 </button>
                 <button 
                   onClick={() => { playSoundAndHaptic(); setActiveTab('analytics'); }} 
@@ -362,13 +388,13 @@ function App() {
                 >
                   📊 Analytics
                 </button>
-                <button onClick={handleLogout} style={{ backgroundColor: 'rgba(239, 68, 68, 0.2)', color: '#f87171', border: '1px solid #ef4444', padding: '4px 10px', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold', marginLeft: '6px' }}>
+                <button onClick={handleLogout} style={{ backgroundColor: 'rgba(239, 68, 68, 0.2)', color: '#f87171', border: '1px solid #ef4444', padding: '4px 8px', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold', marginLeft: '4px' }}>
                   Logout
                 </button>
               </div>
             </div>
 
-            {/* TAB 1: MAIN TASKS VIEW */}
+            {/* TAB 1: MAIN LIST VIEW */}
             {activeTab === 'tasks' && (
               <div>
                 {/* Analytics & Stats Bar */}
@@ -646,7 +672,49 @@ function App() {
               </div>
             )}
 
-            {/* TAB 2: INTERACTIVE ANALYTICS DASHBOARD */}
+            {/* TAB 2: KANBAN BOARD VIEW */}
+            {activeTab === 'kanban' && (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '15px' }}>
+                {/* Column 1: Pending / To-Do */}
+                <div style={{ backgroundColor: theme.inputBg, padding: '14px', borderRadius: '12px', border: `1px solid ${theme.border}` }}>
+                  <h3 style={{ margin: '0 0 12px 0', fontSize: '14px', color: '#facc15', display: 'flex', justifyContent: 'space-between' }}>
+                    <span>⏳ To-Do</span>
+                    <span>({tasks.filter(t => !t.completed).length})</span>
+                  </h3>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    {tasks.filter(t => !t.completed).map(task => (
+                      <div key={task._id || task.id} style={{ padding: '10px', borderRadius: '8px', backgroundColor: theme.card, border: `1px solid ${theme.border}` }}>
+                        <h5 style={{ margin: '0 0 4px 0', fontSize: '13px' }}>{task.title}</h5>
+                        <p style={{ margin: '0 0 6px 0', fontSize: '11px', color: theme.subText }}>{task.category || 'Personal'} • {task.priority}</p>
+                        <button onClick={() => toggleTaskStatus(task._id || task.id)} style={{ padding: '3px 8px', backgroundColor: 'rgba(34, 197, 94, 0.2)', color: '#4ade80', border: '1px solid #22c55e', borderRadius: '6px', fontSize: '10px', cursor: 'pointer', fontWeight: 'bold' }}>
+                          Mark Done ➔
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Column 2: Completed */}
+                <div style={{ backgroundColor: theme.inputBg, padding: '14px', borderRadius: '12px', border: `1px solid ${theme.border}` }}>
+                  <h3 style={{ margin: '0 0 12px 0', fontSize: '14px', color: '#4ade80', display: 'flex', justifyContent: 'space-between' }}>
+                    <span>✓ Completed</span>
+                    <span>({tasks.filter(t => t.completed).length})</span>
+                  </h3>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    {tasks.filter(t => t.completed).map(task => (
+                      <div key={task._id || task.id} style={{ padding: '10px', borderRadius: '8px', backgroundColor: theme.card, border: `1px solid ${theme.border}`, opacity: 0.8 }}>
+                        <h5 style={{ margin: '0 0 4px 0', fontSize: '13px', textDecoration: 'line-through', color: theme.subText }}>{task.title}</h5>
+                        <button onClick={() => toggleTaskStatus(task._id || task.id)} style={{ padding: '3px 8px', backgroundColor: 'rgba(234, 179, 8, 0.2)', color: '#facc15', border: '1px solid #eab308', borderRadius: '6px', fontSize: '10px', cursor: 'pointer', fontWeight: 'bold' }}>
+                          ↩ Re-open
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* TAB 3: INTERACTIVE ANALYTICS DASHBOARD */}
             {activeTab === 'analytics' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
                 <div style={{ backgroundColor: theme.inputBg, padding: '16px', borderRadius: '12px', border: `1px solid ${theme.border}` }}>
