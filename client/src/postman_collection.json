@@ -1,0 +1,27 @@
+{
+	"info": {
+		"name": "MERN Capstone APIs",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Get Tasks",
+			"request": {
+				"method": "GET",
+				"url": { "raw": "http://localhost:5000/api/tasks" }
+			}
+		},
+		{
+			"name": "Create Task",
+			"request": {
+				"method": "POST",
+				"header": [{ "key": "Content-Type", "value": "application/json" }],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"title\": \"Postman Task\",\n  \"description\": \"Tested via Postman\"\n}"
+				},
+				"url": { "raw": "http://localhost:5000/api/tasks" }
+			}
+		}
+	]
+}
