@@ -24,8 +24,14 @@ function App() {
   const [dueDate, setDueDate] = useState('');
   const [subTaskInput, setSubTaskInput] = useState('');
   const [subTasks, setSubTasks] = useState([]);
+  
+  // Filtering, Sorting & Editing States
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState('all');
+  const [selectedCategoryFilter, setSelectedCategoryFilter] = useState('All');
+  const [sortBy, setSortBy] = useState('newest'); // 'newest', 'oldest', 'priority', 'dueDate'
+  const [editingTaskId, setEditingTaskId] = useState(null);
+  const [editTitle, setEditTitle] = useState('');
   const [isDarkMode, setIsDarkMode] = useState(true);
 
   const API_URL = 'http://localhost:5000/api/tasks';
@@ -63,7 +69,6 @@ function App() {
     }
   };
 
-  // Auth Handler
   const handleAuthSubmit = async (e) => {
     e.preventDefault();
     setAuthError('');
@@ -92,7 +97,6 @@ function App() {
     localStorage.removeItem('token');
   };
 
-  // Sub-task Handler
   const handleAddSubTask = (e) => {
     e.preventDefault();
     if (!subTaskInput.trim()) return;
@@ -124,6 +128,7 @@ function App() {
       category,
       dueDate,
       subTasks,
+      createdAt: new Date().toLocaleDateString(),
       userId: user ? user.email : 'guest',
       completed: false
     };
@@ -142,6 +147,18 @@ function App() {
     setSubTasks([]);
   };
 
+  const startEditing = (task) => {
+    playSoundAndHaptic();
+    setEditingTaskId(task._id || task.id);
+    setEditTitle(task.title);
+  };
+
+  const saveEdit = (id) => {
+    playSoundAndHaptic();
+    setTasks(tasks.map(t => (t._id === id || t.id === id) ? { ...t, title: editTitle } : t));
+    setEditingTaskId(null);
+  };
+
   const toggleTaskStatus = async (id) => {
     playSoundAndHaptic();
     setTasks(tasks.map(t => (t._id === id || t.id === id) ? { ...t, completed: !t.completed } : t));
@@ -156,6 +173,13 @@ function App() {
     try {
       await axios.delete(`${API_URL}/${id}`);
     } catch (err) {}
+  };
+
+  const clearCompleted = () => {
+    playSoundAndHaptic();
+    if (window.confirm("Are you sure you want to clear all completed tasks?")) {
+      setTasks(tasks.filter(t => !t.completed));
+    }
   };
 
   const exportToCSV = () => {
@@ -174,16 +198,41 @@ function App() {
     document.body.removeChild(link);
   };
 
+  const getDateStatus = (dateString) => {
+    if (!dateString) return null;
+    const today = new Date().toISOString().split('T')[0];
+    if (dateString < today) return { label: 'Overdue', color: '#f87171', bg: 'rgba(239, 68, 68, 0.15)' };
+    if (dateString === today) return { label: 'Due Today', color: '#facc15', bg: 'rgba(234, 179, 8, 0.15)' };
+    return null;
+  };
+
   const completedCount = tasks.filter(t => t.completed).length;
   const highPriorityCount = tasks.filter(t => t.priority === 'High' && !t.completed).length;
   const progressPercent = tasks.length > 0 ? Math.round((completedCount / tasks.length) * 100) : 0;
 
+  // Filter & Sort Logic
   const filteredTasks = tasks.filter(task => {
     const matchesSearch = task.title.toLowerCase().includes(search.toLowerCase()) || 
                           (task.description && task.description.toLowerCase().includes(search.toLowerCase()));
-    if (filter === 'pending') return matchesSearch && !task.completed;
-    if (filter === 'completed') return matchesSearch && task.completed;
-    return matchesSearch;
+    const matchesCategory = selectedCategoryFilter === 'All' || task.category === selectedCategoryFilter;
+    
+    if (filter === 'pending') return matchesSearch && matchesCategory && !task.completed;
+    if (filter === 'completed') return matchesSearch && matchesCategory && task.completed;
+    return matchesSearch && matchesCategory;
+  }).sort((a, b) => {
+    if (sortBy === 'priority') {
+      const weight = { High: 3, Medium: 2, Low: 1 };
+      return (weight[b.priority] || 0) - (weight[a.priority] || 0);
+    }
+    if (sortBy === 'dueDate') {
+      if (!a.dueDate) return 1;
+      if (!b.dueDate) return -1;
+      return new Date(a.dueDate) - new Date(b.dueDate);
+    }
+    if (sortBy === 'oldest') {
+      return (a._id || a.id) - (b._id || b.id);
+    }
+    return (b._id || b.id) - (a._id || a.id); // Default 'newest'
   });
 
   const theme = {
@@ -296,11 +345,19 @@ function App() {
                 <div style={{ width: `${progressPercent}%`, backgroundColor: '#38bdf8', height: '100%', transition: 'width 0.4s ease' }}></div>
               </div>
 
-              {/* Stats Pills */}
-              <div style={{ display: 'flex', gap: '8px', fontSize: '11px' }}>
-                <span style={{ padding: '4px 8px', borderRadius: '6px', backgroundColor: theme.card, border: `1px solid ${theme.border}` }}>📋 Total: <b>{tasks.length}</b></span>
-                <span style={{ padding: '4px 8px', borderRadius: '6px', backgroundColor: 'rgba(234, 179, 8, 0.15)', color: '#facc15' }}>⏳ Pending: <b>{tasks.length - completedCount}</b></span>
-                <span style={{ padding: '4px 8px', borderRadius: '6px', backgroundColor: 'rgba(239, 68, 68, 0.15)', color: '#f87171' }}>🔥 High Priority: <b>{highPriorityCount}</b></span>
+              {/* Stats Pills & Clear Completed */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+                <div style={{ display: 'flex', gap: '8px', fontSize: '11px', flexWrap: 'wrap' }}>
+                  <span style={{ padding: '4px 8px', borderRadius: '6px', backgroundColor: theme.card, border: `1px solid ${theme.border}` }}>📋 Total: <b>{tasks.length}</b></span>
+                  <span style={{ padding: '4px 8px', borderRadius: '6px', backgroundColor: 'rgba(234, 179, 8, 0.15)', color: '#facc15' }}>⏳ Pending: <b>{tasks.length - completedCount}</b></span>
+                  <span style={{ padding: '4px 8px', borderRadius: '6px', backgroundColor: 'rgba(239, 68, 68, 0.15)', color: '#f87171' }}>🔥 High: <b>{highPriorityCount}</b></span>
+                </div>
+
+                {completedCount > 0 && (
+                  <button onClick={clearCompleted} style={{ backgroundColor: 'transparent', color: '#f87171', border: 'none', cursor: 'pointer', fontSize: '11px', fontWeight: 'bold', textDecoration: 'underline' }}>
+                    🧹 Clear Completed ({completedCount})
+                  </button>
+                )}
               </div>
             </div>
 
@@ -383,15 +440,51 @@ function App() {
               </button>
             </form>
 
-            {/* Search & Filter */}
+            {/* Category Filter Pills */}
+            <div style={{ display: 'flex', gap: '6px', overflowX: 'auto', paddingBottom: '8px', marginBottom: '12px' }}>
+              {['All', 'Personal', 'Work', 'University', 'Finance'].map((cat) => (
+                <button
+                  key={cat}
+                  onClick={() => { playSoundAndHaptic(); setSelectedCategoryFilter(cat); }}
+                  style={{
+                    padding: '6px 12px',
+                    borderRadius: '8px',
+                    border: `1px solid ${selectedCategoryFilter === cat ? '#0284c7' : theme.border}`,
+                    fontSize: '11px',
+                    fontWeight: 'bold',
+                    cursor: 'pointer',
+                    backgroundColor: selectedCategoryFilter === cat ? '#0284c7' : theme.inputBg,
+                    color: selectedCategoryFilter === cat ? '#ffffff' : theme.subText,
+                    whiteSpace: 'nowrap'
+                  }}
+                >
+                  {cat === 'All' ? '📂 All Categories' : cat}
+                </button>
+              ))}
+            </div>
+
+            {/* Search, Status & Sorting Bar */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '20px' }}>
-              <input 
-                type="text" 
-                placeholder="🔍 Search tasks..." 
-                value={search} 
-                onChange={(e) => setSearch(e.target.value)}
-                style={{ padding: '10px 14px', borderRadius: '8px', backgroundColor: theme.inputBg, border: `1px solid ${theme.border}`, color: theme.text, fontSize: '13px' }}
-              />
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <input 
+                  type="text" 
+                  placeholder="🔍 Search tasks..." 
+                  value={search} 
+                  onChange={(e) => setSearch(e.target.value)}
+                  style={{ flex: 2, padding: '10px 14px', borderRadius: '8px', backgroundColor: theme.inputBg, border: `1px solid ${theme.border}`, color: theme.text, fontSize: '13px' }}
+                />
+
+                <select 
+                  value={sortBy} 
+                  onChange={(e) => setSortBy(e.target.value)}
+                  style={{ flex: 1, padding: '10px', borderRadius: '8px', backgroundColor: theme.inputBg, border: `1px solid ${theme.border}`, color: theme.text, fontSize: '12px', fontWeight: '600' }}
+                >
+                  <option value="newest">↕️ Newest First</option>
+                  <option value="oldest">↕️ Oldest First</option>
+                  <option value="priority">🔥 High Priority</option>
+                  <option value="dueDate">📅 Due Date</option>
+                </select>
+              </div>
 
               <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
                 {['all', 'pending', 'completed'].map((type) => (
@@ -421,63 +514,102 @@ function App() {
               {filteredTasks.length === 0 ? (
                 <p style={{ textAlign: 'center', color: theme.subText, fontSize: '13px', margin: '15px 0' }}>No tasks found in this view.</p>
               ) : (
-                filteredTasks.map((task) => (
-                  <div key={task._id || task.id} style={{ padding: '14px 16px', borderRadius: '12px', backgroundColor: theme.inputBg, border: `1px solid ${theme.border}` }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                      <div style={{ flex: 1, paddingRight: '10px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px', flexWrap: 'wrap' }}>
-                          <h4 style={{ margin: 0, color: task.completed ? theme.subText : theme.text, textDecoration: task.completed ? 'line-through' : 'none', fontSize: '15px' }}>{task.title}</h4>
-                          <span style={{ fontSize: '10px', fontWeight: 'bold', padding: '2px 6px', borderRadius: '6px', backgroundColor: 'rgba(56, 189, 248, 0.15)', color: '#38bdf8', border: '1px solid #0284c7' }}>
-                            {task.category || 'Personal'}
-                          </span>
-                          {task.priority && (
-                            <span style={{ fontSize: '10px', fontWeight: 'bold', padding: '2px 6px', borderRadius: '6px', backgroundColor: priorityColors[task.priority]?.bg, color: priorityColors[task.priority]?.text, border: `1px solid ${priorityColors[task.priority]?.border}` }}>
-                              {task.priority}
+                filteredTasks.map((task) => {
+                  const id = task._id || task.id;
+                  const dateStatus = getDateStatus(task.dueDate);
+
+                  return (
+                    <div key={id} style={{ padding: '14px 16px', borderRadius: '12px', backgroundColor: theme.inputBg, border: `1px solid ${theme.border}` }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                        <div style={{ flex: 1, paddingRight: '10px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px', flexWrap: 'wrap' }}>
+                            
+                            {/* Inline Edit Title or Standard Display */}
+                            {editingTaskId === id ? (
+                              <div style={{ display: 'flex', gap: '6px', width: '100%', marginBottom: '4px' }}>
+                                <input 
+                                  type="text" 
+                                  value={editTitle} 
+                                  onChange={(e) => setEditTitle(e.target.value)}
+                                  style={{ padding: '4px 8px', borderRadius: '6px', backgroundColor: theme.card, border: `1px solid ${theme.border}`, color: theme.text, fontSize: '14px', flex: 1 }}
+                                />
+                                <button onClick={() => saveEdit(id)} style={{ padding: '4px 8px', backgroundColor: '#22c55e', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '11px', fontWeight: 'bold' }}>Save</button>
+                              </div>
+                            ) : (
+                              <h4 style={{ margin: 0, color: task.completed ? theme.subText : theme.text, textDecoration: task.completed ? 'line-through' : 'none', fontSize: '15px' }}>
+                                {task.title}
+                              </h4>
+                            )}
+
+                            <span style={{ fontSize: '10px', fontWeight: 'bold', padding: '2px 6px', borderRadius: '6px', backgroundColor: 'rgba(56, 189, 248, 0.15)', color: '#38bdf8', border: '1px solid #0284c7' }}>
+                              {task.category || 'Personal'}
                             </span>
+                            {task.priority && (
+                              <span style={{ fontSize: '10px', fontWeight: 'bold', padding: '2px 6px', borderRadius: '6px', backgroundColor: priorityColors[task.priority]?.bg, color: priorityColors[task.priority]?.text, border: `1px solid ${priorityColors[task.priority]?.border}` }}>
+                                {task.priority}
+                              </span>
+                            )}
+                            {dateStatus && !task.completed && (
+                              <span style={{ fontSize: '10px', fontWeight: 'bold', padding: '2px 6px', borderRadius: '6px', backgroundColor: dateStatus.bg, color: dateStatus.color, border: `1px solid ${dateStatus.color}` }}>
+                                {dateStatus.label}
+                              </span>
+                            )}
+                          </div>
+
+                          {task.description && <p style={{ margin: '0 0 6px 0', color: theme.subText, fontSize: '12px' }}>{task.description}</p>}
+                          
+                          <div style={{ display: 'flex', gap: '10px', alignItems: 'center', fontSize: '11px' }}>
+                            {task.dueDate && <span style={{ color: '#38bdf8', fontWeight: 'bold' }}>📅 Due: {task.dueDate}</span>}
+                            {task.createdAt && <span style={{ color: theme.subText }}>🕒 {task.createdAt}</span>}
+                          </div>
+                          
+                          {/* Sub-tasks Checklist Display */}
+                          {task.subTasks && task.subTasks.length > 0 && (
+                            <div style={{ marginTop: '8px', borderTop: `1px dashed ${theme.border}`, paddingTop: '6px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                              {task.subTasks.map(st => (
+                                <div key={st.id} onClick={() => toggleSubTask(id, st.id)} style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '12px', color: st.completed ? theme.subText : theme.text }}>
+                                  <input type="checkbox" checked={st.completed} readOnly style={{ cursor: 'pointer' }} />
+                                  <span style={{ textDecoration: st.completed ? 'line-through' : 'none' }}>{st.text}</span>
+                                </div>
+                              ))}
+                            </div>
                           )}
                         </div>
-                        {task.description && <p style={{ margin: '0 0 6px 0', color: theme.subText, fontSize: '12px' }}>{task.description}</p>}
-                        {task.dueDate && <p style={{ margin: '0 0 6px 0', color: '#38bdf8', fontSize: '11px', fontWeight: 'bold' }}>📅 Due: {task.dueDate}</p>}
-                        
-                        {/* Sub-tasks Checklist Display */}
-                        {task.subTasks && task.subTasks.length > 0 && (
-                          <div style={{ marginTop: '8px', borderTop: `1px dashed ${theme.border}`, paddingTop: '6px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                            {task.subTasks.map(st => (
-                              <div key={st.id} onClick={() => toggleSubTask(task._id || task.id, st.id)} style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '12px', color: st.completed ? theme.subText : theme.text }}>
-                                <input type="checkbox" checked={st.completed} readOnly style={{ cursor: 'pointer' }} />
-                                <span style={{ textDecoration: st.completed ? 'line-through' : 'none' }}>{st.text}</span>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
 
-                      <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                        <button 
-                          onClick={() => toggleTaskStatus(task._id || task.id)}
-                          style={{ 
-                            backgroundColor: task.completed ? 'rgba(34, 197, 94, 0.2)' : 'rgba(234, 179, 8, 0.2)', 
-                            color: task.completed ? '#4ade80' : '#facc15', 
-                            border: '1px solid ' + (task.completed ? '#22c55e' : '#eab308'), 
-                            padding: '5px 10px', 
-                            borderRadius: '8px', 
-                            cursor: 'pointer', 
-                            fontSize: '12px', 
-                            fontWeight: 'bold' 
-                          }}
-                        >
-                          {task.completed ? '✓ Done' : '⏳ Pending'}
-                        </button>
-                        <button 
-                          onClick={() => deleteTask(task._id || task.id)}
-                          style={{ backgroundColor: 'rgba(239, 68, 68, 0.2)', color: '#f87171', border: '1px solid #ef4444', padding: '5px 8px', borderRadius: '8px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}
-                        >
-                          ✕
-                        </button>
+                        <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                          <button 
+                            onClick={() => startEditing(task)}
+                            title="Edit Title"
+                            style={{ backgroundColor: theme.inputBg, color: theme.subText, border: `1px solid ${theme.border}`, padding: '5px 8px', borderRadius: '8px', cursor: 'pointer', fontSize: '12px' }}
+                          >
+                            ✏️
+                          </button>
+                          <button 
+                            onClick={() => toggleTaskStatus(id)}
+                            style={{ 
+                              backgroundColor: task.completed ? 'rgba(34, 197, 94, 0.2)' : 'rgba(234, 179, 8, 0.2)', 
+                              color: task.completed ? '#4ade80' : '#facc15', 
+                              border: '1px solid ' + (task.completed ? '#22c55e' : '#eab308'), 
+                              padding: '5px 10px', 
+                              borderRadius: '8px', 
+                              cursor: 'pointer', 
+                              fontSize: '12px', 
+                              fontWeight: 'bold' 
+                            }}
+                          >
+                            {task.completed ? '✓ Done' : '⏳ Pending'}
+                          </button>
+                          <button 
+                            onClick={() => deleteTask(id)}
+                            style={{ backgroundColor: 'rgba(239, 68, 68, 0.2)', color: '#f87171', border: '1px solid #ef4444', padding: '5px 8px', borderRadius: '8px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}
+                          >
+                            ✕
+                          </button>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
           </div>
